@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Dashboard</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    #filterBar {
+      margin: 20px 0;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    #incidentChart {
+      max-width: 400px;
+      margin: 20px auto;
+    }
+
+    /* Chatbot styles */
+    #chatbot {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 300px;
+      height: 400px;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      background-color: #fff;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      display: none;
+    }
+
+    #chatbotHeader {
+      background-color: #4caf50;
+      padding: 10px;
+      color: #fff;
+      text-align: center;
+      border-radius: 10px 10px 0 0;
+    }
+
+    #chatbotMessages {
+      padding: 10px;
+      height: 280px;
+      overflow-y: scroll;
+    }
+
+    #chatbotInput {
+      width: calc(100% - 20px);
+      padding: 10px;
+      border: none;
+      border-top: 1px solid #ccc;
+      border-radius: 0 0 10px 10px;
+    }
+
+    #chatbotToggle {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background-color: #4caf50;
+      color: white;
+      padding: 10px;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="logo">AI Incident Response</div>
+    <ul>
+      <li><a href="index.html">Home</a></li>
+      <li><a href="addincident.html">Add Incident</a></li>
+      <li><a href="dashboard.html">Dashboard</a></li>
+    </ul>
+  </nav>
+
+  <main>
+    <h2>📊 Incident Dashboard</h2>
+
+    <!-- 🔍 Filter Bar -->
+    <div id="filterBar">
+      <input type="text" id="searchInput" placeholder="Search by Title..." />
+      <select id="severityFilter">
+        <option value="">All Severities</option>
+        <option value="Low">Low</option>
+        <option value="Medium">Medium</option>
+        <option value="High">High</option>
+      </select>
+    </div>
+
+    <table id="incidentTable" border="1">
+      <thead>
+        <tr>
+          <th>Title</th>
+          <th>Description</th>
+          <th>Severity</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <!-- 🥧 Chart Section -->
+    <div>
+      <h3 style="text-align:center;">Incident Severity Distribution</h3>
+      <canvas id="incidentChart"></canvas>
+    </div>
+  </main>
+
+  <!-- Chatbot UI -->
+  <div id="chatbot">
+    <div id="chatbotHeader">AI Chatbot</div>
+    <div id="chatbotMessages"></div>
+    <input id="chatbotInput" type="text" placeholder="Ask me something..." />
+  </div>
+
+  <!-- Chatbot Toggle Button -->
+  <div id="chatbotToggle" onclick="toggleChatbot()">💬</div>
+
+  <script>
+    let allIncidents = [];
+
+    async function fetchIncidents() {
+      const res = await fetch('/api/incidents');
+      allIncidents = await res.json();
+      renderTable(allIncidents);
+      renderChart(allIncidents);
+    }
+
+    function renderTable(data) {
+      const tbody = document.querySelector('#incidentTable tbody');
+      tbody.innerHTML = '';
+
+      data.forEach(incident => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td><span>${incident.title}</span><input type="text" value="${incident.title}" style="display:none;" /></td>
+          <td><span>${incident.description}</span><textarea style="display:none;">${incident.description}</textarea></td>
+          <td>
+            <span>${incident.severity}</span>
+            <select style="display:none;">
+              <option value="Low" ${incident.severity === 'Low' ? 'selected' : ''}>Low</option>
+              <option value="Medium" ${incident.severity === 'Medium' ? 'selected' : ''}>Medium</option>
+              <option value="High" ${incident.severity === 'High' ? 'selected' : ''}>High</option>
+            </select>
+          </td>
+          <td>
+            <button onclick="toggleUpdateMode(this, ${incident.id})">Update</button>
+            <button onclick="deleteIncident(${incident.id})">Delete</button>
+          </td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+
+    function renderChart(data) {
+      const ctx = document.getElementById('incidentChart').getContext('2d');
+      const counts = { Low: 0, Medium: 0, High: 0 };
+      data.forEach(i => counts[i.severity]++);
+
+      if (window.chartInstance) window.chartInstance.destroy(); // reset before redraw
+
+      window.chartInstance = new Chart(ctx, {
+        type: 'pie',
+        data: {
+          labels: ['Low', 'Medium', 'High'],
+          datasets: [{
+            data: [counts.Low, counts.Medium, counts.High],
+            backgroundColor: ['#4caf50', '#ff9800', '#f44336']
+          }]
+        },
+        options: {
+          responsive: true
+        }
+      });
+    }
+
+    function toggleUpdateMode(button, id) {
+      const row = button.closest('tr');
+      const isEditing = button.textContent === 'Save';
+      const spanElems = row.querySelectorAll('span');
+      const inputElems = row.querySelectorAll('input, textarea, select');
+
+      if (!isEditing) {
+        spanElems.forEach(span => span.style.display = 'none');
+        inputElems.forEach(input => input.style.display = 'inline-block');
+        button.textContent = 'Save';
+      } else {
+        const [titleInput, descInput, severitySelect] = inputElems;
+        const title = titleInput.value;
+        const description = descInput.value;
+        const severity = severitySelect.value;
+
+        fetch(`/api/incidents/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, description, severity })
+        }).then(async res => {
+          if (res.ok) {
+            alert('✅ Incident updated successfully');
+            fetchIncidents();
+          } else {
+            const error = await res.json();
+            alert('❌ Error: ' + error.message);
+          }
+        });
+      }
+    }
+
+    async function deleteIncident(id) {
+      if (!confirm('Are you sure you want to delete this incident?')) return;
+      const res = await fetch(`/api/incidents/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        alert('🗑️ Incident deleted');
+        fetchIncidents();
+      } else {
+        const err = await res.json();
+        alert('❌ Error: ' + err.error);
+      }
+    }
+
+    function applyFilters() {
+      const titleText = document.getElementById('searchInput').value.toLowerCase();
+      const severity = document.getElementById('severityFilter').value;
+
+      const filtered = allIncidents.filter(i => {
+        const matchesTitle = i.title.toLowerCase().includes(titleText);
+        const matchesSeverity = !severity || i.severity === severity;
+        return matchesTitle && matchesSeverity;
+      });
+
+      renderTable(filtered);
+      renderChart(filtered);
+    }
+
+    document.getElementById('searchInput').addEventListener('input', applyFilters);
+    document.getElementById('severityFilter').addEventListener('change', applyFilters);
+
+    fetchIncidents();
+
+    // Chatbot functionality
+    function toggleChatbot() {
+      const chatbot = document.getElementById('chatbot');
+      chatbot.style.display = chatbot.style.display === 'none' ? 'block' : 'none';
+    }
+
+    document.getElementById('chatbotInput').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        const userMessage = e.target.value;
+        if (userMessage.trim() === '') return;
+        addMessage('User: ' + userMessage);
+        e.target.value = '';
+
+        // Simple chatbot response (can be improved with API calls)
+        setTimeout(() => {
+          const botResponse = getBotResponse(userMessage);
+          addMessage('AI: ' + botResponse);
+        }, 1000);
+      }
+    });
+
+    function addMessage(message) {
+      const messages = document.getElementById('chatbotMessages');
+      const msgElement = document.createElement('p');
+      msgElement.textContent = message;
+      messages.appendChild(msgElement);
+      messages.scrollTop = messages.scrollHeight; // Auto scroll
+    }
+
+    function getBotResponse(input) {
+      // Add simple responses or integrate AI here
+      if (input.toLowerCase().includes('incident')) {
+        return 'I can help you with incidents! What would you like to know?';
+      } else {
+        return 'I am here to help you. How can I assist you with incidents?';
+      }
+    }
+  </script>
+</body>
+</html>

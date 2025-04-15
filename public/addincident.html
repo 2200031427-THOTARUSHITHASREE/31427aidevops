@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Add Incident</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <nav>
+    <div class="logo">AI Incident Response</div>
+    <ul>
+      <li><a href="index.html">Home</a></li>
+      <li><a href="addincident.html">Add Incident</a></li>
+      <li><a href="dashboard.html">Dashboard</a></li>
+    </ul>
+  </nav>
+
+  <main>
+    <h2>📝 Add New Incident</h2>
+    <form id="incidentForm">
+      <label for="title">Title:</label>
+      <input type="text" id="title" name="title" required>
+
+      <label for="description">Description:</label>
+      <textarea id="description" name="description" required></textarea>
+
+      <label for="severity">Severity:</label>
+      <select id="severity" name="severity" required>
+        <option value="Low">Low</option>
+        <option value="Medium">Medium</option>
+        <option value="High">High</option>
+      </select>
+
+      <button type="submit">Submit</button>
+    </form>
+  </main>
+
+  <script>
+    const form = document.getElementById('incidentForm');
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const res = await fetch('/api/incidents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: form.title.value,
+          description: form.description.value,
+          severity: form.severity.value
+        })
+      });
+      const result = await res.json();
+      if (res.ok) {
+        alert('✅ Incident submitted!');
+        form.reset();
+        window.location.href = 'dashboard.html';
+      } else {
+        alert('❌ Error: ' + result.error);
+      }
+    });
+  </script>
+</body>
+</html>
