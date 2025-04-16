@@ -13,9 +13,6 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(express.static('public'));  // Serve static files from the 'public' folder
 
-// 🔐 OpenAI API Key
-const openaiAPIKey = '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';
-
 // MySQL Connection
 const db = mysql.createConnection({
   host: 'localhost',
