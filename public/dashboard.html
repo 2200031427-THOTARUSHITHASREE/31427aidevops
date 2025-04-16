@@ -6,6 +6,41 @@
   <link rel="stylesheet" href="style.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0 20px;
+    }
+
+    nav {
+      background-color: #333;
+      padding: 15px;
+      color: white;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    nav .logo {
+      font-weight: bold;
+      font-size: 20px;
+    }
+
+    nav ul {
+      list-style: none;
+      display: flex;
+      gap: 20px;
+    }
+
+    nav ul li a {
+      color: white;
+      text-decoration: none;
+    }
+
+    h2 {
+      margin-top: 20px;
+    }
+
     #filterBar {
       margin: 20px 0;
       display: flex;
@@ -16,6 +51,17 @@
     #incidentChart {
       max-width: 400px;
       margin: 20px auto;
+    }
+
+    #incidentTable {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    #incidentTable th, #incidentTable td {
+      padding: 10px;
+      border: 1px solid #ccc;
+      text-align: left;
     }
 
     /* Chatbot styles */
@@ -30,6 +76,7 @@
       background-color: #fff;
       box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
       display: none;
+      flex-direction: column;
     }
 
     #chatbotHeader {
@@ -42,8 +89,9 @@
 
     #chatbotMessages {
       padding: 10px;
-      height: 280px;
+      flex: 1;
       overflow-y: scroll;
+      font-size: 14px;
     }
 
     #chatbotInput {
@@ -63,6 +111,36 @@
       padding: 10px;
       border-radius: 50%;
       cursor: pointer;
+    }
+
+    /* Add incident form styles 
+    #incidentForm {
+      margin-top: 20px;
+      padding: 20px;
+      background-color: #f9f9f9;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }*/
+
+    #incidentForm input, #incidentForm select, #incidentForm textarea {
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+
+    button {
+      padding: 8px 15px;
+      background-color: #4caf50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #45a049;
     }
   </style>
 </head>
@@ -90,7 +168,7 @@
       </select>
     </div>
 
-    <table id="incidentTable" border="1">
+    <table id="incidentTable">
       <thead>
         <tr>
           <th>Title</th>
@@ -103,9 +181,26 @@
     </table>
 
     <!-- 🥧 Chart Section -->
-    <div>
+    <div style="max-width: 1000px; margin: 90px auto;">
       <h3 style="text-align:center;">Incident Severity Distribution</h3>
-      <canvas id="incidentChart"></canvas>
+      <canvas id="incidentChart" width="10000" height="10000"></canvas>
+    </div>
+    
+
+    <!-- Add Incident Form -->
+    <div id="incidentForm">
+     
+      <form id="addIncidentForm">
+        <input type="text" id="titleInput" placeholder="Incident Title" required />
+        <textarea id="descriptionInput" placeholder="Incident Description" required></textarea>
+        <select id="severityInput" required>
+          <option value="">Select Severity</option>
+          <option value="Low">Low</option>
+          <option value="Medium">Medium</option>
+          <option value="High">High</option>
+        </select>
+        <button type="submit">Add Incident</button>
+      </form>
     </div>
   </main>
 
@@ -238,12 +333,53 @@
     document.getElementById('searchInput').addEventListener('input', applyFilters);
     document.getElementById('severityFilter').addEventListener('change', applyFilters);
 
-    fetchIncidents();
+    // Add new incident functionality
+    document.getElementById('addIncidentForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+
+      const title = document.getElementById('titleInput').value;
+      const description = document.getElementById('descriptionInput').value;
+      const severity = document.getElementById('severityInput').value;
+
+      const newIncident = { title, description, severity };
+
+      const res = await fetch('/api/incidents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newIncident)
+      });
+
+      if (res.ok) {
+        alert('✅ Incident added successfully');
+        fetchIncidents(); // Refresh the list
+      } else {
+        const err = await res.json();
+        alert('❌ Error: ' + err.error);
+      }
+    });
+
+    fetchIncidents();//
 
     // Chatbot functionality
     function toggleChatbot() {
       const chatbot = document.getElementById('chatbot');
-      chatbot.style.display = chatbot.style.display === 'none' ? 'block' : 'none';
+      chatbot.style.display = chatbot.style.display === 'none' ? 'flex' : 'none';
+    }
+
+    function addMessage(message) {
+      const msgBox = document.getElementById('chatbotMessages');
+      const msg = document.createElement('div');
+      msg.textContent = message;
+      msgBox.appendChild(msg);
+      msgBox.scrollTop = msgBox.scrollHeight;
+    }
+
+    function getBotResponse(input) {
+      input = input.toLowerCase();
+      if (input.includes('incident')) return "You can view incidents on the dashboard.";
+      if (input.includes('add')) return "Use the form below to add an incident.";
+      if (input.includes('hi') || input.includes('hello')) return "Hi there! How can I help you?";
+      return "Sorry, I didn't understand that.";
     }
 
     document.getElementById('chatbotInput').addEventListener('keypress', function(e) {
@@ -252,31 +388,12 @@
         if (userMessage.trim() === '') return;
         addMessage('User: ' + userMessage);
         e.target.value = '';
-
-        // Simple chatbot response (can be improved with API calls)
         setTimeout(() => {
           const botResponse = getBotResponse(userMessage);
           addMessage('AI: ' + botResponse);
-        }, 1000);
+        }, 500);
       }
     });
-
-    function addMessage(message) {
-      const messages = document.getElementById('chatbotMessages');
-      const msgElement = document.createElement('p');
-      msgElement.textContent = message;
-      messages.appendChild(msgElement);
-      messages.scrollTop = messages.scrollHeight; // Auto scroll
-    }
-
-    function getBotResponse(input) {
-      // Add simple responses or integrate AI here
-      if (input.toLowerCase().includes('incident')) {
-        return 'I can help you with incidents! What would you like to know?';
-      } else {
-        return 'I am here to help you. How can I assist you with incidents?';
-      }
-    }
   </script>
 </body>
 </html>

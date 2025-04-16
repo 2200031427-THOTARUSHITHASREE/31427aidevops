@@ -1,92 +1,137 @@
 const express = require('express');
+const mysql = require('mysql2');
 const bodyParser = require('body-parser');
-const { Configuration, OpenAIApi } = require('openai');
-require('dotenv').config();  // Load environment variables from .env file
+const cors = require('cors');
+const path = require('path');
+const axios = require('axios');
 
 const app = express();
 const port = 5050;
 
-// Middleware to parse incoming JSON requests
+// Middleware
+app.use(cors());
 app.use(bodyParser.json());
+app.use(express.static('public'));  // Serve static files from the 'public' folder
 
-// Serve static files (optional, if you need to serve any static assets like HTML, CSS, etc.)
-app.use(express.static('public'));
+// 🔐 OpenAI API Key
+const openaiAPIKey = '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';
 
-// Initialize OpenAI configuration
-const configuration = new Configuration({
-  apiKey: process.env.OPENAI_API_KEY,  // Use API key from .env file
+// MySQL Connection
+const db = mysql.createConnection({
+  host: 'localhost',
+  user: 'root',
+  password: 'rushitha123',
+  database: 'incident_db'
 });
-const openai = new OpenAIApi(configuration);
 
-// Serve the chatbot response endpoint
-app.post('/api/chatbot', async (req, res) => {
-  const userMessage = req.body.message; // The message sent by the user
+db.connect(err => {
+  if (err) {
+    console.error('❌ Database connection failed:', err.stack);
+    return;
+  }
+  console.log('✅ Connected to the MySQL database');
+});
+
+// =================== INCIDENT API ====================
+
+// Get all incidents
+app.get('/api/incidents', (req, res) => {
+  db.query('SELECT * FROM incidents', (err, results) => {
+    if (err) {
+      console.error("❌ GET /api/incidents error:", err);
+      return res.status(500).json({ error: 'Failed to fetch incidents' });
+    }
+    res.json(results);
+  });
+});
+
+// Add an incident
+app.post('/api/incidents', (req, res) => {
+  const { title, description, severity } = req.body;
+  if (!title || !description || !severity) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  const query = 'INSERT INTO incidents (title, description, severity) VALUES (?, ?, ?)';
+  db.query(query, [title, description, severity], (err, result) => {
+    if (err) {
+      console.error("❌ POST /api/incidents error:", err);
+      return res.status(500).json({ error: 'Failed to add incident' });
+    }
+    res.json({ message: '✅ Incident added successfully' });
+  });
+});
+
+// Update an incident
+app.put('/api/incidents/:id', (req, res) => {
+  const { title, description, severity } = req.body;
+  const { id } = req.params;
+
+  const query = 'UPDATE incidents SET title = ?, description = ?, severity = ? WHERE id = ?';
+  db.query(query, [title, description, severity, id], (err, result) => {
+    if (err) {
+      console.error("❌ PUT /api/incidents/:id error:", err);
+      return res.status(500).json({ error: 'Failed to update incident' });
+    }
+    res.json({ message: '✅ Incident updated successfully' });
+  });
+});
+
+// Delete an incident
+app.delete('/api/incidents/:id', (req, res) => {
+  const { id } = req.params;
+  const query = 'DELETE FROM incidents WHERE id = ?';
+
+  db.query(query, [id], (err, result) => {
+    if (err) {
+      console.error("❌ DELETE /api/incidents/:id error:", err);
+      return res.status(500).json({ error: 'Failed to delete incident' });
+    }
+    res.json({ message: '✅ Incident deleted successfully' });
+  });
+});
+
+// =================== OPENAI CHATBOT ENDPOINT ====================
+
+app.post('/api/openai-chat', async (req, res) => {
+  const { prompt } = req.body;
+
+  if (!prompt) {
+    return res.status(400).json({ error: 'No prompt provided' });
+  }
 
   try {
-    // Call OpenAI API with userMessage
-    const response = await openai.createCompletion({
-      model: 'text-davinci-003',  // You can also use other models like 'gpt-3.5-turbo'
-      prompt: `The user asked: "${userMessage}". Provide a helpful response for incidents and system management. Respond with relevant information based on the message.`,
-      max_tokens: 150
-    });
+    const response = await axios.post(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        model: 'gpt-3.5-turbo',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 150,
+        temperature: 0.7,
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${openaiAPIKey}`,
+          'Content-Type': 'application/json',
+        }
+      }
+    );
 
-    // Send the response from OpenAI back to the frontend
-    res.json({ message: response.data.choices[0].text.trim() });
+    const chatbotResponse = response.data.choices[0].message.content.trim();
+    res.json({ response: chatbotResponse });
 
   } catch (error) {
-    console.error('Error communicating with OpenAI API:', error);
-    res.status(500).json({ message: 'Error processing your request.' });
+    console.error("❌ OpenAI API Error:", error?.response?.data || error?.message, error?.response?.status);
+    res.status(500).json({ error: 'Failed to generate response from OpenAI' });
   }
 });
 
-// Route to get all incidents (sample API)
-app.get('/api/incidents', (req, res) => {
-  const incidents = [
-    { id: 1, title: 'Incident 1', description: 'Description 1', severity: 'High' },
-    { id: 2, title: 'Incident 2', description: 'Description 2', severity: 'Medium' },
-    { id: 3, title: 'Incident 3', description: 'Description 3', severity: 'Low' }
-  ];
-  res.json(incidents);
-});
-
-// Route to add a new incident
-app.post('/api/incidents', async (req, res) => {
-  const { title, description, severity } = req.body;
-  try {
-    // Your database insertion logic here
-    // Example: Save the incident to your database
-    res.json({ message: 'Incident added successfully' });
-  } catch (err) {
-    res.status(500).json({ message: 'Error adding incident' });
-  }
-});
-
-// Route to update an incident
-app.put('/api/incidents/:id', async (req, res) => {
-  const { id } = req.params;
-  const { title, description, severity } = req.body;
-  try {
-    // Your database update logic here
-    // Example: Update the incident in your database
-    res.json({ message: 'Incident updated successfully' });
-  } catch (err) {
-    res.status(500).json({ message: 'Error updating incident' });
-  }
-});
-
-// Route to delete an incident
-app.delete('/api/incidents/:id', async (req, res) => {
-  const { id } = req.params;
-  try {
-    // Your database deletion logic here
-    // Example: Delete the incident from your database
-    res.json({ message: 'Incident deleted successfully' });
-  } catch (err) {
-    res.status(500).json({ message: 'Error deleting incident' });
-  }
+// Serve the dashboard.html page
+app.get('/dashboard', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
 });
 
 // Start the server
 app.listen(port, () => {
-  console.log(`Server running at http://localhost:${port}`);
+  console.log(`🚀 Server running on http://localhost:${port}`);
 });
