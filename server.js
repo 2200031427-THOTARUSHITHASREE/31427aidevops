@@ -3,7 +3,6 @@ const mysql = require('mysql2');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const path = require('path');
-const axios = require('axios');
 
 const app = express();
 const port = 5050;
@@ -86,41 +85,6 @@ app.delete('/api/incidents/:id', (req, res) => {
     }
     res.json({ message: '✅ Incident deleted successfully' });
   });
-});
-
-// =================== OPENAI CHATBOT ENDPOINT ====================
-
-app.post('/api/openai-chat', async (req, res) => {
-  const { prompt } = req.body;
-
-  if (!prompt) {
-    return res.status(400).json({ error: 'No prompt provided' });
-  }
-
-  try {
-    const response = await axios.post(
-      'https://api.openai.com/v1/chat/completions',
-      {
-        model: 'gpt-3.5-turbo',
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 150,
-        temperature: 0.7,
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${openaiAPIKey}`,
-          'Content-Type': 'application/json',
-        }
-      }
-    );
-
-    const chatbotResponse = response.data.choices[0].message.content.trim();
-    res.json({ response: chatbotResponse });
-
-  } catch (error) {
-    console.error("❌ OpenAI API Error:", error?.response?.data || error?.message, error?.response?.status);
-    res.status(500).json({ error: 'Failed to generate response from OpenAI' });
-  }
 });
 
 // Serve the dashboard.html page

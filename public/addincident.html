@@ -4,8 +4,98 @@
   <meta charset="UTF-8" />
   <title>Add Incident</title>
   <link rel="stylesheet" href="style.css" />
+  <style>
+    /* Form Layout */
+    form {
+      display: flex;
+      flex-direction: column;
+      max-width: 500px;
+      margin: 40px auto;
+      padding: 20px;
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      background-color: #f9f9f9;
+    }
+
+    label {
+      margin-top: 15px;
+      font-weight: bold;
+    }
+
+    input, textarea, select, button {
+      width: 100%;
+      padding: 10px;
+      margin-top: 5px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      font-size: 14px;
+    }
+
+    button {
+      background-color: #4CAF50;
+      color: white;
+      cursor: pointer;
+      font-weight: bold;
+      margin-top: 20px;
+    }
+
+    button:hover {
+      background-color: #45a049;
+    }
+
+    /* Tag Suggestions */
+    .tag-suggestions {
+      margin-top: 10px;
+    }
+
+    .tag {
+      display: inline-block;
+      background-color: #dfe6e9;
+      padding: 5px 12px;
+      border-radius: 20px;
+      margin: 5px 5px 0 0;
+      font-size: 13px;
+      color: #2d3436;
+    }
+
+    /* Navbar */
+    nav {
+      background-color: #2c3e50;
+      color: white;
+      padding: 10px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    nav .logo {
+      font-size: 20px;
+      font-weight: bold;
+    }
+
+    nav ul {
+      list-style: none;
+      display: flex;
+      gap: 20px;
+    }
+
+    nav ul li a {
+      color: white;
+      text-decoration: none;
+    }
+
+    nav ul li a:hover {
+      text-decoration: underline;
+    }
+
+    main h2 {
+      text-align: center;
+      margin-top: 20px;
+    }
+  </style>
 </head>
 <body>
+
   <nav>
     <div class="logo">AI Incident Response</div>
     <ul>
@@ -24,6 +114,9 @@
       <label for="description">Description:</label>
       <textarea id="description" name="description" required></textarea>
 
+      <!-- NLP Tag Suggestions -->
+      <div class="tag-suggestions" id="tagSuggestions"></div>
+
       <label for="severity">Severity:</label>
       <select id="severity" name="severity" required>
         <option value="Low">Low</option>
@@ -37,6 +130,23 @@
 
   <script>
     const form = document.getElementById('incidentForm');
+    const descriptionInput = document.getElementById('description');
+    const tagBox = document.getElementById('tagSuggestions');
+
+    // Simple NLP keyword extraction
+    function extractKeywords(text) {
+      const stopwords = ["the", "is", "at", "which", "on", "a", "due", "to", "in", "of", "with", "for", "and", "an", "this", "that", "as"];
+      const words = text.toLowerCase().match(/\b\w+\b/g) || [];
+      const keywords = words.filter(word => !stopwords.includes(word));
+      return [...new Set(keywords)].slice(0, 5); // Max 5 unique tags
+    }
+
+    descriptionInput.addEventListener('input', () => {
+      const text = descriptionInput.value;
+      const tags = extractKeywords(text);
+      tagBox.innerHTML = tags.map(tag => `<span class="tag">${tag}</span>`).join('');
+    });
+
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const res = await fetch('/api/incidents', {
@@ -52,6 +162,7 @@
       if (res.ok) {
         alert('✅ Incident submitted!');
         form.reset();
+        tagBox.innerHTML = ''; // Clear tags
         window.location.href = 'dashboard.html';
       } else {
         alert('❌ Error: ' + result.error);
